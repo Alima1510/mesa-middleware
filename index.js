@@ -7,74 +7,49 @@ app.use(express.json());
 const API_KEY = process.env.API_FOOTBALL_KEY;
 const API_URL = 'https://v3.football.api-sports.io';
 
-// IDs das Ligas Selecionadas (Conforme Tabela Revisada)
-const LIGAS_MONITORADAS = [
+// IDs dos Times de Elite Selecionados
+const TIMES_ELITE = [
   // Brasil
-  71, 72, 73,      // Série A, Série B, Copa do Brasil
-
-  // Internacionais & Continentais
-  13, 11,          // Libertadores, Sul-Americana
-  2, 3, 848,       // Champions League, Europa League, Conference
-  16, 847,         // CONCACAF Champions Cup, Leagues Cup
-
-  // Inglaterra
-  39, 45, 48,      // Premier League, FA Cup, EFL Cup (Carabao Cup)
-
-  // Espanha
-  140, 143,        // LaLiga, Copa del Rey
-
-  // Itália
-  135, 137,        // Serie A, Coppa Italia
-
-  // Alemanha
-  78, 81,          // Bundesliga, DFB-Pokal
-
-  // França
-  61, 66,          // Ligue 1, Coupe de France
-
-  // Portugal
-  94, 96,          // Liga Portugal, Taça de Portugal
-
-  // Holanda
-  88, 90,          // Eredivisie, KNVB Beker
-
-  // Bélgica
-  144, 147,        // Pro League, Croky Cup
-
-  // Escócia
-  179, 183,        // Premiership, Scottish Cup
-
-  // Argentina
-  128, 130,        // Liga Profesional, Copa Argentina
-
-  // Chile
-  265, 267,        // Primera División, Copa Chile
-
-  // Colômbia
-  239, 242,        // Primera A, Copa Colombia
-
-  // Equador
-  242, 244,        // LigaPro Serie A, Copa Ecuador
-
-  // Paraguai
-  250, 252,        // División de Honor, Copa Paraguay
-
+  127, 121, 126, 131, 1062, 119, 130, 120, 124, 125,
   // Bolívia
-  253, 255,        // División Profesional, Copa Bolivia
-
+  1118,
+  // Argentina
+  435, 451, 436, 434, 448,
+  // Chile
+  1100, 1092, 1103,
+  // Colômbia
+  1136, 1129, 1139, 1126,
+  // Equador
+  1158, 1148, 1150,
+  // Escócia
+  247, 252,
   // Uruguai
-  268,             // Primera División
-
-  // USA & México
-  253,             // MLS (Major League Soccer)
-  262              // Liga MX (Primeira Divisão)
+  1166, 1165,
+  // USA (MLS)
+  15949, 1600, 1595, 1611, 1606,
+  // México
+  2287, 2279, 2278, 2280,
+  // Inglaterra
+  50, 40, 42, 33, 49,
+  // Espanha
+  541, 529, 530,
+  // Itália
+  505, 496, 489, 492, 497,
+  // Alemanha
+  157, 168, 165, 173,
+  // França
+  85, 81, 91,
+  // Portugal
+  211, 228, 212,
+  // Holanda
+  194, 197, 195
 ];
 
 app.get('/mesa-jogos', async (req, res) => {
     try {
         const date = req.query.date || new Date().toISOString().split('T')[0];
         
-        // 1. Busca os jogos do dia na API-Football
+        // 1. Busca todos os jogos da data na API-Football
         const responseFixtures = await axios.get(`${API_URL}/fixtures`, {
             params: { date: date, season: 2026 },
             headers: { 'x-apisports-key': API_KEY }
@@ -82,9 +57,10 @@ app.get('/mesa-jogos', async (req, res) => {
 
         const jogos = responseFixtures.data.response || [];
 
-        // 2. Filtra pelas Ligas Monitoradas
+        // 2. Filtra partidas onde PELO MENOS UM dos times seja de Elite
         const jogosFiltrados = jogos.filter(item => 
-            LIGAS_MONITORADAS.includes(item.league.id)
+            TIMES_ELITE.includes(item.teams.home.id) || 
+            TIMES_ELITE.includes(item.teams.away.id)
         );
 
         // 3. Processa e busca odds com Fallback Inteligente
@@ -112,7 +88,7 @@ app.get('/mesa-jogos', async (req, res) => {
                     }
                 }
             } catch (err) {
-                // Em caso de erro na busca de odds de um jogo específico, não interrompe a execução
+                // Em caso de instabilidade na busca de odds, preserva o objeto
             }
 
             return {
@@ -126,7 +102,7 @@ app.get('/mesa-jogos', async (req, res) => {
 
         res.json({
             data_consulta: date,
-            total_jogos_encontrados: jogosFiltrados.length,
+            total_jogos_elite_encontrados: jogosFiltrados.length,
             partidas: resultadoFinal
         });
 
