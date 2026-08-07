@@ -7,7 +7,7 @@ app.use(express.json());
 const API_KEY = process.env.API_FOOTBALL_KEY;
 const API_URL = 'https://v3.football.api-sports.io';
 
-// IDs de TODOS os Campeonatos da Tabela do MESA
+// IDs de TODOS os Campeonatos da Tabela do MESA (Ampliados)
 const LIGAS_MONITORADAS = [
   // Torneios Continentais / Internacionais
   2, 3, 848,     // UEFA Champions, Europa League, Conference
@@ -79,7 +79,7 @@ app.get('/mesa-jogos', async (req, res) => {
     try {
         const date = req.query.date || new Date().toISOString().split('T')[0];
         
-        // 1. Busca os jogos do dia na API-Football
+        // 1. Busca todos os jogos do dia
         const responseFixtures = await axios.get(`${API_URL}/fixtures`, {
             params: { date: date, season: 2026 },
             headers: { 'x-apisports-key': API_KEY }
@@ -87,32 +87,41 @@ app.get('/mesa-jogos', async (req, res) => {
 
         const jogos = responseFixtures.data.response || [];
 
-        // 2. Filtra APENAS as LIGAS MONITORADAS em memória
+        // 2. Filtra pelas ligas monitoradas
         const jogosFiltrados = jogos.filter(item => 
             LIGAS_MONITORADAS.includes(item.league.id)
         );
 
-        // 3. Processa e busca odds com Fallback de Casas de Apostas
+        // 3. Processa e busca odds com FALLBACK COMPLETO
         const resultadoFinal = await Promise.all(jogosFiltrados.map(async (jogo) => {
             let oddTexto = "Indisponível";
 
             try {
+                // Tenta consultar as odds da partida sem travar em bookmaker específico na URL
                 const resOdds = await axios.get(`${API_URL}/odds`, {
                     params: { fixture: jogo.fixture.id },
                     headers: { 'x-apisports-key': API_KEY }
                 });
 
-                const bookmakers = resOdds.data.response[0]?.bookmakers || [];
-                const casaSelecionada = bookmakers.find(b => b.id === 6) || bookmakers[0];
+                const responseOddsData = resOdds.data.response || [];
 
-                if (casaSelecionada) {
-                    const mercado1X2 = casaSelecionada.bets?.find(b => b.id === 1);
-                    if (mercado1X2) {
-                        oddTexto = `[${casaSelecionada.name}] ` + mercado1X2.values.map(v => `${v.value}: ${v.odd}`).join(' | ');
+                if (responseOddsData.length > 0) {
+                    const bookmakers = responseOddsData[0].bookmakers || [];
+                    
+                    // Prioridade 1: Bet365 (id 6) | Prioridade 2: Primeira casa disponível
+                    const casaSelecionada = bookmakers.find(b => b.id === 6) || bookmakers[0];
+
+                    if (casaSelecionada && casaSelecionada.bets) {
+                        // Busca o mercado 1X2 (Match Winner - id 1)
+                        const mercado1X2 = casaSelecionada.bets.find(b => b.id === 1);
+                        if (mercado1X2 && mercado1X2.values) {
+                            const cotações = mercado1X2.values.map(v => `${v.value}: ${v.odd}`).join(' | ');
+                            oddTexto = `[${casaSelecionada.name}] ${cotações}`;
+                        }
                     }
                 }
             } catch (err) {
-                // Mantém "Indisponível" se a odd falhar para este jogo
+                // Se falhar a busca de odds de um jogo, o middleware não quebra
             }
 
             return {
