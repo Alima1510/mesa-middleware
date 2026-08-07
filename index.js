@@ -7,7 +7,7 @@ app.use(express.json());
 const API_KEY = process.env.API_FOOTBALL_KEY;
 const API_URL = 'https://v3.football.api-sports.io';
 
-// IDs das Ligas Selecionadas (Incluindo Uruguai)
+// IDs das Ligas Selecionadas (Conforme Tabela Revisada)
 const LIGAS_MONITORADAS = [
   // Brasil
   71, 72, 73,      // Série A, Série B, Copa do Brasil
@@ -15,57 +15,59 @@ const LIGAS_MONITORADAS = [
   // Internacionais & Continentais
   13, 11,          // Libertadores, Sul-Americana
   2, 3, 848,       // Champions League, Europa League, Conference
+  16, 847,         // CONCACAF Champions Cup, Leagues Cup
 
   // Inglaterra
-  39, 40, 45,      // Premier League, EFL Championship, FA Cup
+  39, 45, 48,      // Premier League, FA Cup, EFL Cup (Carabao Cup)
 
   // Espanha
-  140, 141, 143,   // LaLiga, LaLiga Hypermotion, Copa del Rey
+  140, 143,        // LaLiga, Copa del Rey
 
   // Itália
-  135, 136, 137,   // Serie A, Serie B, Coppa Italia
+  135, 137,        // Serie A, Coppa Italia
 
   // Alemanha
-  78, 79, 81,      // Bundesliga, 2. Bundesliga, DFB-Pokal
+  78, 81,          // Bundesliga, DFB-Pokal
 
   // França
-  61, 62, 66,      // Ligue 1, Ligue 2, Coupe de France
+  61, 66,          // Ligue 1, Coupe de France
 
   // Portugal
-  94, 95, 96,      // Liga Portugal, Liga Portugal 2, Taça de Portugal
+  94, 96,          // Liga Portugal, Taça de Portugal
 
   // Holanda
-  88, 89, 90,      // Eredivisie, Eerste Divisie, KNVB Beker
+  88, 90,          // Eredivisie, KNVB Beker
 
   // Bélgica
-  144, 145, 147,   // Pro League, Challenger Pro, Croky Cup
+  144, 147,        // Pro League, Croky Cup
 
   // Escócia
-  179, 180, 183,   // Premiership, Championship, Scottish Cup
+  179, 183,        // Premiership, Scottish Cup
 
   // Argentina
-  128, 129, 130,   // Liga Profesional, Primera Nacional, Copa Argentina
-
-  // Arábia Saudita
-  307, 308, 310,   // Saudi Pro League, First Division, King's Cup
+  128, 130,        // Liga Profesional, Copa Argentina
 
   // Chile
-  265, 266, 267,   // Primera División, Primera B, Copa Chile
+  265, 267,        // Primera División, Copa Chile
 
   // Colômbia
-  239, 240, 242,   // Primera A, Primera B, Copa Colombia
+  239, 242,        // Primera A, Copa Colombia
 
   // Equador
-  242, 243, 244,   // LigaPro Serie A, Serie B, Copa Ecuador
+  242, 244,        // LigaPro Serie A, Copa Ecuador
 
   // Paraguai
-  250, 251, 252,   // División de Honor, Intermedia, Copa Paraguay
+  250, 252,        // División de Honor, Copa Paraguay
 
   // Bolívia
-  253, 254, 255,   // División Profesional, Copa Simón Bolívar, Copa Bolivia
+  253, 255,        // División Profesional, Copa Bolivia
 
   // Uruguai
-  268              // Primera División
+  268,             // Primera División
+
+  // USA & México
+  253,             // MLS (Major League Soccer)
+  262              // Liga MX (Primeira Divisão)
 ];
 
 app.get('/mesa-jogos', async (req, res) => {
@@ -85,11 +87,8 @@ app.get('/mesa-jogos', async (req, res) => {
             LIGAS_MONITORADAS.includes(item.league.id)
         );
 
-        // Limita a no máximo 30 jogos por consulta para resposta fluida no ChatGPT
-        const jogosLimitados = jogosFiltrados.slice(0, 30);
-
-        // 3. Processa e busca odds com Fallback
-        const resultadoFinal = await Promise.all(jogosLimitados.map(async (jogo) => {
+        // 3. Processa e busca odds com Fallback Inteligente
+        const resultadoFinal = await Promise.all(jogosFiltrados.map(async (jogo) => {
             let oddTexto = "Aguardando Cotação";
 
             try {
@@ -113,7 +112,7 @@ app.get('/mesa-jogos', async (req, res) => {
                     }
                 }
             } catch (err) {
-                // Em caso de erro na busca de odds, mantém o texto padrão sem interromper a execução
+                // Em caso de erro na busca de odds de um jogo específico, não interrompe a execução
             }
 
             return {
@@ -128,7 +127,6 @@ app.get('/mesa-jogos', async (req, res) => {
         res.json({
             data_consulta: date,
             total_jogos_encontrados: jogosFiltrados.length,
-            total_jogos_exibidos: resultadoFinal.length,
             partidas: resultadoFinal
         });
 
