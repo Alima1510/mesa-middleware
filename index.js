@@ -7,8 +7,73 @@ app.use(express.json());
 const API_KEY = process.env.API_FOOTBALL_KEY;
 const API_URL = 'https://v3.football.api-sports.io';
 
-// IDs das Ligas Monitoradas (Brasileirão, PL, LaLiga, Serie A, Champions, Liberta)
-const LIGAS_MONITORADAS = [71, 39, 140, 135, 2, 13];
+// IDs de TODOS os Campeonatos da Tabela do MESA
+const LIGAS_MONITORADAS = [
+  // Torneios Continentais / Internacionais
+  2, 3, 848,     // UEFA Champions, Europa League, Conference
+  13, 11,        // Copa Libertadores, Copa Sul-Americana
+  17, 18,        // AFC Champions League Elite, AFC Cup
+
+  // Brasil
+  71, 72, 73,    // Série A, Série B, Copa do Brasil
+
+  // Inglaterra
+  39, 40, 45,    // Premier League, Championship, FA Cup
+
+  // Espanha
+  140, 141, 143, // LaLiga, LaLiga Hypermotion, Copa del Rey
+
+  // Itália
+  135, 136, 137, // Serie A, Serie B, Coppa Italia
+
+  // Alemanha
+  78, 79, 81,    // Bundesliga, 2. Bundesliga, DFB-Pokal
+
+  // França
+  61, 62, 66,    // Ligue 1, Ligue 2, Coupe de France
+
+  // Portugal
+  94, 95, 96,    // Liga Portugal, Liga Portugal 2, Taça de Portugal
+
+  // Holanda
+  88, 89, 90,    // Eredivisie, Eerste Divisie, KNVB Beker
+
+  // Bélgica
+  144, 145, 147, // Pro League, Challenger Pro, Croky Cup
+
+  // Escócia
+  179, 180, 183, // Premiership, Championship, Scottish Cup
+
+  // Grécia
+  197, 198, 200, // Super League 1, Super League 2, Greek Cup
+
+  // Áustria
+  218, 219, 221, // Bundesliga, 2. Liga, ÖFB-Cup
+
+  // Hungria
+  271, 272, 273, // NB I, NB II, Magyar Kupa
+
+  // Argentina
+  128, 129, 130, // Liga Profesional, Primera Nacional, Copa Argentina
+
+  // Arábia Saudita
+  307, 308, 310, // Saudi Pro League, First Division, King's Cup
+
+  // Chile
+  265, 266, 267, // Primera División, Primera B, Copa Chile
+
+  // Colômbia
+  239, 240, 241, // Primera A, Primera B, Copa Colombia
+
+  // Equador
+  242, 243, 244, // LigaPro Serie A, Serie B, Copa Ecuador
+
+  // Paraguai
+  250, 251, 252, // División de Honor, Intermedia, Copa Paraguay
+
+  // Bolívia
+  253, 254, 255  // División Profesional, Copa Simón Bolívar, Copa Bolivia
+];
 
 app.get('/mesa-jogos', async (req, res) => {
     try {
@@ -32,25 +97,22 @@ app.get('/mesa-jogos', async (req, res) => {
             let oddTexto = "Indisponível";
 
             try {
-                // Busca odds da partida sem restringir bookmaker na chamada principal
                 const resOdds = await axios.get(`${API_URL}/odds`, {
                     params: { fixture: jogo.fixture.id },
                     headers: { 'x-apisports-key': API_KEY }
                 });
 
                 const bookmakers = resOdds.data.response[0]?.bookmakers || [];
-
-                // Tenta priorizar Bet365 (id 6), se não existir pega a primeira disponível
                 const casaSelecionada = bookmakers.find(b => b.id === 6) || bookmakers[0];
 
                 if (casaSelecionada) {
-                    const mercado1X2 = casaSelecionada.bets?.find(b => b.id === 1); // Mercado Match Winner
+                    const mercado1X2 = casaSelecionada.bets?.find(b => b.id === 1);
                     if (mercado1X2) {
                         oddTexto = `[${casaSelecionada.name}] ` + mercado1X2.values.map(v => `${v.value}: ${v.odd}`).join(' | ');
                     }
                 }
             } catch (err) {
-                // Se der erro nas odds de um jogo, mantém "Indisponível" sem travar
+                // Mantém "Indisponível" se a odd falhar para este jogo
             }
 
             return {
@@ -80,5 +142,5 @@ module.exports = app;
 
 if (process.env.NODE_ENV !== 'production') {
     const PORT = process.env.PORT || 3000;
-    app.listen(PORT, () => console.log(`Middleware rodando na porta ${PORT}`));
+    app.listen(PORT, () => console.log(`Middleware MESA rodando na porta ${PORT}`));
 }
