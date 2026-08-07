@@ -27,24 +27,30 @@ app.get('/mesa-jogos', async (req, res) => {
             LIGAS_MONITORADAS.includes(item.league.id)
         );
 
-        // 3. Processa e busca odds leves (Bet365 - bookmaker 6)
+        // 3. Processa e busca odds com Fallback de Casas de Apostas
         const resultadoFinal = await Promise.all(jogosFiltrados.map(async (jogo) => {
-            let oddBet365 = "Indisponível";
+            let oddTexto = "Indisponível";
 
             try {
+                // Busca odds da partida sem restringir bookmaker na chamada principal
                 const resOdds = await axios.get(`${API_URL}/odds`, {
-                    params: { fixture: jogo.fixture.id, bookmaker: 6 },
+                    params: { fixture: jogo.fixture.id },
                     headers: { 'x-apisports-key': API_KEY }
                 });
 
-                const oddsData = resOdds.data.response[0]?.bookmakers[0]?.bets;
-                const mercado1X2 = oddsData?.find(b => b.id === 1); // Mercado Match Winner
+                const bookmakers = resOdds.data.response[0]?.bookmakers || [];
 
-                if (mercado1X2) {
-                    oddBet365 = mercado1X2.values.map(v => `${v.value}: ${v.odd}`).join(' | ');
+                // Tenta priorizar Bet365 (id 6), se não existir pega a primeira disponível
+                const casaSelecionada = bookmakers.find(b => b.id === 6) || bookmakers[0];
+
+                if (casaSelecionada) {
+                    const mercado1X2 = casaSelecionada.bets?.find(b => b.id === 1); // Mercado Match Winner
+                    if (mercado1X2) {
+                        oddTexto = `[${casaSelecionada.name}] ` + mercado1X2.values.map(v => `${v.value}: ${v.odd}`).join(' | ');
+                    }
                 }
             } catch (err) {
-                // Se der erro nas odds de um jogo, não trava o restante
+                // Se der erro nas odds de um jogo, mantém "Indisponível" sem travar
             }
 
             return {
@@ -52,7 +58,7 @@ app.get('/mesa-jogos', async (req, res) => {
                 horario_utc: jogo.fixture.date,
                 campeonato: jogo.league.name,
                 confronto: `${jogo.teams.home.name} x ${jogo.teams.away.name}`,
-                odds_1X2: oddBet365
+                odds_1X2: oddTexto
             };
         }));
 
