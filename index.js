@@ -7,7 +7,39 @@ app.use(express.json());
 const API_KEY = process.env.API_FOOTBALL_KEY;
 const API_URL = 'https://v3.football.api-sports.io';
 
-// IDs dos Times de Elite Selecionados
+// ==========================================
+// 1. LISTA DE LIGAS MONITORADAS (Campeonatos)
+// ==========================================
+const LIGAS_MONITORADAS = [
+  // Brasil
+  71, 72, 73,      // Série A, Série B, Copa do Brasil
+  // Continentais
+  13, 11, 16, 847, // Libertadores, Sul-Americana, CONCACAF Champions Cup, Leagues Cup
+  2, 3, 848,       // Champions League, Europa League, Conference
+  // Américas
+  253, 262,        // MLS, Liga MX
+  128, 130,        // Argentina (Liga e Copa)
+  265, 267,        // Chile (Primera e Copa)
+  239, 242,        // Colômbia (Primera A e Copa)
+  244,             // Equador (Copa) - LigaPro Serie A usa ID 242
+  250, 252,        // Paraguai (División e Copa)
+  253, 255,        // Bolívia (División e Copa)
+  268,             // Uruguai (Primera)
+  // Europa
+  39, 45, 48,      // Premier League, FA Cup, EFL Cup
+  140, 143,        // LaLiga, Copa del Rey
+  135, 137,        // Serie A Itália, Coppa Italia
+  78, 81,          // Bundesliga, DFB-Pokal
+  61, 66,          // Ligue 1, Coupe de France
+  94, 96,          // Liga Portugal, Taça
+  88, 90,          // Eredivisie, KNVB Beker
+  144, 147,        // Pro League Bélgica, Croky Cup
+  179, 183         // Premiership Escócia, Scottish Cup
+];
+
+// ==========================================
+// 2. LISTA DE TIMES DE ELITE (Elite)
+// ==========================================
 const TIMES_ELITE = [
   // Brasil
   127, 121, 126, 131, 1062, 119, 130, 120, 124, 125,
@@ -48,23 +80,35 @@ const TIMES_ELITE = [
 app.get('/mesa-jogos', async (req, res) => {
     try {
         const date = req.query.date || new Date().toISOString().split('T')[0];
-        
-        // 1. Busca todos os jogos da data na API-Football
+        const modo = (req.query.modo || 'campeonatos').toLowerCase(); // Padrão: campeonatos
+
+        // 1. Busca os jogos do dia na API-Football
         const responseFixtures = await axios.get(`${API_URL}/fixtures`, {
             params: { date: date, season: 2026 },
             headers: { 'x-apisports-key': API_KEY }
         });
 
         const jogos = responseFixtures.data.response || [];
+        let jogosFiltrados = [];
 
-        // 2. Filtra partidas onde PELO MENOS UM dos times seja de Elite
-        const jogosFiltrados = jogos.filter(item => 
-            TIMES_ELITE.includes(item.teams.home.id) || 
-            TIMES_ELITE.includes(item.teams.away.id)
-        );
+        // 2. Lógica de Seleção baseada nas Palavras-Chave
+        if (modo === 'elite') {
+            jogosFiltrados = jogos.filter(item => 
+                TIMES_ELITE.includes(item.teams.home.id) || 
+                TIMES_ELITE.includes(item.teams.away.id)
+            );
+        } else {
+            // Modo Padrão: Campeonatos
+            jogosFiltrados = jogos.filter(item => 
+                LIGAS_MONITORADAS.includes(item.league.id)
+            );
+        }
 
-        // 3. Processa e busca odds com Fallback Inteligente
-        const resultadoFinal = await Promise.all(jogosFiltrados.map(async (jogo) => {
+        // Limite de segurança de 30 jogos por resposta
+        const jogosLimitados = jogosFiltrados.slice(0, 30);
+
+        // 3. Processamento de Odds com Fallback
+        const resultadoFinal = await Promise.all(jogosLimitados.map(async (jogo) => {
             let oddTexto = "Aguardando Cotação";
 
             try {
@@ -88,7 +132,7 @@ app.get('/mesa-jogos', async (req, res) => {
                     }
                 }
             } catch (err) {
-                // Em caso de instabilidade na busca de odds, preserva o objeto
+                // Preserva o fluxo contínuo
             }
 
             return {
@@ -102,7 +146,9 @@ app.get('/mesa-jogos', async (req, res) => {
 
         res.json({
             data_consulta: date,
-            total_jogos_elite_encontrados: jogosFiltrados.length,
+            modo_utilizado: modo,
+            total_jogos_encontrados: jogosFiltrados.length,
+            total_jogos_exibidos: resultadoFinal.length,
             partidas: resultadoFinal
         });
 
