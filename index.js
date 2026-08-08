@@ -7,80 +7,37 @@ app.use(express.json());
 const API_KEY = process.env.API_FOOTBALL_KEY;
 const API_URL = 'https://v3.football.api-sports.io';
 
-// ==========================================
-// 1. LISTA DE LIGAS MONITORADAS (Campeonatos)
-// ==========================================
-const LIGAS_MONITORADAS = [
-  // Brasil
-  71, 72, 73,      // Série A, Série B, Copa do Brasil
-  // Continentais
-  13, 11, 16, 847, // Libertadores, Sul-Americana, CONCACAF Champions Cup, Leagues Cup
-  2, 3, 848,       // Champions League, Europa League, Conference
-  // Américas
-  253, 262,        // MLS, Liga MX
-  128, 130,        // Argentina (Liga e Copa)
-  265, 267,        // Chile (Primera e Copa)
-  239, 242,        // Colômbia (Primera A e Copa)
-  244,             // Equador (Copa) - LigaPro Serie A usa ID 242
-  250, 252,        // Paraguai (División e Copa)
-  253, 255,        // Bolívia (División e Copa)
-  268,             // Uruguai (Primera)
-  // Europa
-  39, 45, 48,      // Premier League, FA Cup, EFL Cup
-  140, 143,        // LaLiga, Copa del Rey
-  135, 137,        // Serie A Itália, Coppa Italia
-  78, 81,          // Bundesliga, DFB-Pokal
-  61, 66,          // Ligue 1, Coupe de France
-  94, 96,          // Liga Portugal, Taça
-  88, 90,          // Eredivisie, KNVB Beker
-  144, 147,        // Pro League Bélgica, Croky Cup
-  179, 183         // Premiership Escócia, Scottish Cup
-];
+// Mapeamento de Ligas por Região
+const LIGAS_AMERICAS = [71, 72, 73, 13, 11, 16, 847, 253, 262, 128, 130, 265, 267, 239, 242, 244, 250, 252, 255, 268];
+const LIGAS_EUROPA = [2, 3, 848, 39, 45, 48, 140, 143, 135, 137, 78, 81, 61, 66, 94, 96, 88, 90, 144, 147, 179, 183];
+const LIGAS_TODAS = [...LIGAS_AMERICAS, ...LIGAS_EUROPA];
 
-// ==========================================
-// 2. LISTA DE TIMES DE ELITE (Elite)
-// ==========================================
+// IDs dos Times de Elite
 const TIMES_ELITE = [
-  // Brasil
-  127, 121, 126, 131, 1062, 119, 130, 120, 124, 125,
-  // Bolívia
-  1118,
-  // Argentina
-  435, 451, 436, 434, 448,
-  // Chile
-  1100, 1092, 1103,
-  // Colômbia
-  1136, 1129, 1139, 1126,
-  // Equador
-  1158, 1148, 1150,
-  // Escócia
-  247, 252,
-  // Uruguai
-  1166, 1165,
-  // USA (MLS)
-  15949, 1600, 1595, 1611, 1606,
-  // México
-  2287, 2279, 2278, 2280,
-  // Inglaterra
-  50, 40, 42, 33, 49,
-  // Espanha
-  541, 529, 530,
-  // Itália
-  505, 496, 489, 492, 497,
-  // Alemanha
-  157, 168, 165, 173,
-  // França
-  85, 81, 91,
-  // Portugal
-  211, 228, 212,
-  // Holanda
-  194, 197, 195
+  127, 121, 126, 131, 1062, 119, 130, 120, 124, 125, // Brasil
+  1118, // Bolívia
+  435, 451, 436, 434, 448, // Argentina
+  1100, 1092, 1103, // Chile
+  1136, 1129, 1139, 1126, // Colômbia
+  1158, 1148, 1150, // Equador
+  247, 252, // Escócia
+  1166, 1165, // Uruguai
+  15949, 1600, 1595, 1611, 1606, // USA
+  2287, 2279, 2278, 2280, // México
+  50, 40, 42, 33, 49, // Inglaterra
+  541, 529, 530, // Espanha
+  505, 496, 489, 492, 497, // Itália
+  157, 168, 165, 173, // Alemanha
+  85, 81, 91, // França
+  211, 228, 212, // Portugal
+  194, 197, 195 // Holanda
 ];
 
 app.get('/mesa-jogos', async (req, res) => {
     try {
         const date = req.query.date || new Date().toISOString().split('T')[0];
-        const modo = (req.query.modo || 'campeonatos').toLowerCase(); // Padrão: campeonatos
+        const modo = (req.query.modo || 'campeonatos').toLowerCase();
+        const regiao = (req.query.regiao || 'todas').toLowerCase();
 
         // 1. Busca os jogos do dia na API-Football
         const responseFixtures = await axios.get(`${API_URL}/fixtures`, {
@@ -91,23 +48,29 @@ app.get('/mesa-jogos', async (req, res) => {
         const jogos = responseFixtures.data.response || [];
         let jogosFiltrados = [];
 
-        // 2. Lógica de Seleção baseada nas Palavras-Chave
+        // 2. Aplica o Filtro de Modo (Campeonatos ou Elite)
         if (modo === 'elite') {
             jogosFiltrados = jogos.filter(item => 
                 TIMES_ELITE.includes(item.teams.home.id) || 
                 TIMES_ELITE.includes(item.teams.away.id)
             );
         } else {
-            // Modo Padrão: Campeonatos
             jogosFiltrados = jogos.filter(item => 
-                LIGAS_MONITORADAS.includes(item.league.id)
+                LIGAS_TODAS.includes(item.league.id)
             );
         }
 
-        // Limite de segurança de 30 jogos por resposta
+        // 3. Aplica o Filtro de Região ANTES do limite de 30 jogos
+        if (regiao === 'americas') {
+            jogosFiltrados = jogosFiltrados.filter(item => LIGAS_AMERICAS.includes(item.league.id));
+        } else if (regiao === 'europa') {
+            jogosFiltrados = jogosFiltrados.filter(item => LIGAS_EUROPA.includes(item.league.id));
+        }
+
+        // 4. Agora sim aplica o corte de segurança de até 30 jogos (já 100% filtrados da região)
         const jogosLimitados = jogosFiltrados.slice(0, 30);
 
-        // 3. Processamento de Odds com Fallback
+        // 5. Processamento das Odds
         const resultadoFinal = await Promise.all(jogosLimitados.map(async (jogo) => {
             let oddTexto = "Aguardando Cotação";
 
@@ -131,9 +94,7 @@ app.get('/mesa-jogos', async (req, res) => {
                         }
                     }
                 }
-            } catch (err) {
-                // Preserva o fluxo contínuo
-            }
+            } catch (err) {}
 
             return {
                 id_partida: jogo.fixture.id,
@@ -147,8 +108,8 @@ app.get('/mesa-jogos', async (req, res) => {
         res.json({
             data_consulta: date,
             modo_utilizado: modo,
+            regiao_filtrada: regiao,
             total_jogos_encontrados: jogosFiltrados.length,
-            total_jogos_exibidos: resultadoFinal.length,
             partidas: resultadoFinal
         });
 
